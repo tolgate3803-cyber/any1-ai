@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "Any1 AI | 인공지능 종합 플랫폼",
+  "short_name": "Any1 AI",
+  "description": "올인원 AI 종합 플랫폼 - AI 음성 합성, 사주 만세력, 이미지 분석, 스토어 패키징",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#04060a",
+  "theme_color": "#00f3ff",
+  "orientation": "any",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}

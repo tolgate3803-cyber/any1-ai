@@ -1,0 +1,6 @@
+{
+  "name": "Any1 AI",
+  "description": "Comprehensive AI platform with various tools for fortune telling, travel, creativity, and business.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
