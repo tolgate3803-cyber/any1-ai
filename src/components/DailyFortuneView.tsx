@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Sun, Heart, Sparkles, Compass, Clock, Palette, ArrowRight, RefreshCw, UserCheck } from 'lucide-react';
+import { Sun, Heart, Sparkles, Compass, Clock, Palette, ArrowRight, RefreshCw, UserCheck, Crown } from 'lucide-react';
+import { openUpgradeCheckout } from '../utils/membershipClient';
 
 interface BirthInput {
   year: number;
@@ -646,6 +647,28 @@ export default function DailyFortuneView({ onOpenFullSaju }: DailyFortuneViewPro
           )}
         </div>
       )}
+
+      {/* Freemium to Paid Conversion Banner */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-neon/5 to-transparent border border-amber-400/35 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-black text-amber-300">
+            <Crown size={15} />
+            <span>오늘의 운세·궁합은 무상 기본 기능으로 언제나 무료입니다</span>
+          </div>
+          <p className="text-xs text-text-light/70 leading-relaxed">
+            더 깊은 <strong>평생 정밀 사주 · AI 작명 · 관상 · 풍수 · AI 성우 낭독</strong> 기능은 초기 3회 무료 체험 후 유료 이용권으로 무제한 전환할 수 있습니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => openUpgradeCheckout('voluntary', '오늘의 운세 & 궁합')}
+          className="px-4 py-2.5 bg-amber-400/20 hover:bg-amber-400 text-amber-200 hover:text-bg-dark border border-amber-400/50 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          <Crown size={14} />
+          <span>유료 이용권 전환하기</span>
+          <ArrowRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }

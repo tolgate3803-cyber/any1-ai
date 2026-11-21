@@ -7,16 +7,30 @@ import {
   PenTool, 
   Mic2, 
   FileText, 
-  UtensilsCrossed, 
-  Leaf, 
-  Briefcase, 
   Globe, 
-  Smartphone,
   Compass,
   LucideIcon,
   Volume2,
   Sun
 } from 'lucide-react';
+
+export interface AdItem {
+  id: string;
+  badge: string;
+  title: string;
+  description: string;
+  tickerText: string;
+  mediaType: 'video' | 'youtube' | 'image' | 'text';
+  mediaUrl: string;
+  linkUrl: string;
+  linkLabel: string;
+  accentColor: 'lime' | 'cyan' | 'amber' | 'rose';
+  aspectMode?: 'blur16x9' | 'crop16x9' | 'original';
+  isActive: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Feature {
   id: string;
@@ -157,42 +171,6 @@ export const FEATURES: Feature[] = [
     ]
   },
   {
-    id: 'recipe',
-    title: '냉장고 맞춤 레시피',
-    description: '냉장고에 남아 있는 재료를 알려주시면 10분 만에 뚝딱 만들 수 있는 맛있는 집밥 레시피를 알려드립니다.',
-    icon: UtensilsCrossed,
-    category: 'travel',
-    suggestions: [
-      '냉장고에 김치, 계란, 스팸뿐인데 할 수 있는 맛있는 요리 알려줘.',
-      '자취생을 위한 10분 컷 원팬 파스타 레시피 알려줘.',
-      '다이어트용 고단백 저탄수화물 저녁 식단 추천해줘.'
-    ]
-  },
-  {
-    id: 'plant-id',
-    title: '식물·꽃 이름 & 케어',
-    description: '식물 사진을 올리거나 잎 상태를 설명하면 이름과 물주기·햇빛 등 맞춤 관리법을 알려드립니다.',
-    icon: Leaf,
-    category: 'travel',
-    suggestions: [
-      '잎 끝이 노랗게 변하는 몬스테라, 어떻게 관리해야 하나요?',
-      '그늘에서도 잘 자라는 실내 공기 정화 식물 추천해줘.',
-      '선물용으로 좋은 꽃말을 가진 꽃 리스트 알려줘.'
-    ]
-  },
-  {
-    id: 'business-plan',
-    title: '사업계획서·기획안',
-    description: '창업 아이템이나 아이디어를 입력하면 시장 분석·수익 구조까지 갖춘 전문 사업계획서 초안을 작성합니다.',
-    icon: Briefcase,
-    category: 'business',
-    suggestions: [
-      '동네 카페 창업을 위한 상권 분석과 SWOT 정리해줘.',
-      '지원사업 제출용 사업계획서 핵심 목차와 작성 요령 알려줘.',
-      '소상공인을 위한 월 구독형 서비스 기획안 초안 작성해줘.'
-    ]
-  },
-  {
     id: 'web-gen',
     title: '프로그램·웹 제작 도우미',
     description: '필요한 웹사이트 화면 구조나 업무 자동화 코드 초안을 빠르게 설계하고 코드로 작성해 드립니다.',
@@ -208,6 +186,5 @@ export const FEATURES: Feature[] = [
 
 export const SIDEBAR_ITEMS = [
   { id: 'dashboard', label: '대시보드', icon: LayoutDashboard },
-  { id: 'tester-hub', label: '테스터 매칭 마이페이지', icon: Smartphone },
   ...FEATURES.map(f => ({ id: f.id, label: f.title, icon: f.icon }))
 ];

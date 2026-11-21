@@ -21,7 +21,6 @@ export default function Sidebar({ activeId, onSelect }: SidebarProps) {
 
         <nav className="space-y-1">
           {SIDEBAR_ITEMS.map((item) => {
-            const isTesterHub = item.id === 'tester-hub';
             const isActive = activeId === item.id;
             return (
               <button
@@ -30,22 +29,13 @@ export default function Sidebar({ activeId, onSelect }: SidebarProps) {
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-[11px] font-bold tracking-wider transition-all ${
                   isActive
                     ? 'bg-neon text-bg-dark shadow-[0_0_12px_rgba(0,243,255,0.25)]'
-                    : isTesterHub
-                      ? 'text-cyan-300 bg-cyan-950/30 border border-cyan-500/30 hover:border-neon hover:text-white'
-                      : 'text-text-light/60 hover:text-neon hover:bg-white/5'
+                    : 'text-text-light/60 hover:text-neon hover:bg-white/5'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <item.icon size={14} className={isTesterHub && !isActive ? 'text-neon' : ''} />
+                  <item.icon size={14} />
                   <span className="truncate">{item.label}</span>
                 </div>
-                {isTesterHub && (
-                  <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded font-black ${
-                    isActive ? 'bg-bg-dark text-neon' : 'bg-neon/20 text-neon'
-                  }`}>
-                    품앗이
-                  </span>
-                )}
               </button>
             );
           })}

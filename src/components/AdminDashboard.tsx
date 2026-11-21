@@ -29,8 +29,10 @@ import {
   Info,
   Smartphone,
   Layers,
-  Package
+  Package,
+  Megaphone
 } from 'lucide-react';
+import AdManagerPanel from './AdManagerPanel';
 
 interface VisitLog {
   id: string;
@@ -103,7 +105,7 @@ export default function AdminDashboard({
   const refreshTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Admin Console active section tab
-  const [adminTab, setAdminTab] = useState<'traffic' | 'payments'>('traffic');
+  const [adminTab, setAdminTab] = useState<'traffic' | 'payments' | 'ads'>('traffic');
 
   // Payment & order management states
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
@@ -118,8 +120,8 @@ export default function AdminDashboard({
     accountNumber: '',
     accountHolder: '',
     remittanceUrl: '',
-    contactInfo: 'tolgate3803@gmail.com',
-    paymentNotice: '입금 확인 후 10분~1시간 내로 전담 테스터 배정 안내를 이메일 및 연락처로 발송해 드립니다.',
+    contactInfo: '010-2459-9811 / tolgate3803@gmail.com',
+    paymentNotice: '입금 확인 후 이용권 승인 및 안내 메일/연락을 빠르게 보내드립니다.',
     tossClientKey: '',
     tossSecretKey: ''
   });
@@ -602,6 +604,19 @@ export default function AdminDashboard({
           )}
         </button>
 
+        <button
+          type="button"
+          onClick={() => setAdminTab('ads')}
+          className={`px-4 py-2.5 text-xs font-black rounded-sm transition-all flex items-center gap-2 cursor-pointer ${
+            adminTab === 'ads'
+              ? 'bg-neon text-bg-dark shadow-[0_0_15px_rgba(0,243,255,0.25)]'
+              : 'bg-black/30 border border-border-dark text-text-light/60 hover:text-white hover:border-neon/50'
+          }`}
+        >
+          <Megaphone size={14} />
+          <span>광고판 · 영상 관리</span>
+        </button>
+
         {onOpenIconGuide && (
           <button
             type="button"
@@ -636,7 +651,25 @@ export default function AdminDashboard({
         )}
       </div>
 
-      {adminTab === 'payments' ? (
+      {adminTab === 'ads' ? (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-neon/5 border border-neon/25 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-text-light/80">
+              <span className="font-black text-neon">관리자 전용 광고판 관리</span> · 여기서 홍보 영상을 올리거나 수정/숨기기 하면 메인 화면 광고판에 즉시 반영됩니다.
+            </div>
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-4 py-2 bg-neon hover:bg-white text-bg-dark text-xs font-black rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+              >
+                메인 화면에서 바로 확인하기
+              </button>
+            )}
+          </div>
+          <AdManagerPanel adminPassword={password} />
+        </div>
+      ) : adminTab === 'payments' ? (
         <div className="space-y-8 font-sans">
           {/* Payment Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
@@ -677,7 +710,7 @@ export default function AdminDashboard({
               <h3 className="text-2xl font-black text-emerald-400">
                 {paymentStats.paidCount} <span className="text-xs font-normal text-text-light/40">건</span>
               </h3>
-              <p className="text-[10px] text-text-light/40 mt-2 font-sans">입금 확인 및 테스터 배정 완료 건</p>
+              <p className="text-[10px] text-text-light/40 mt-2 font-sans">입금 확인 및 이용권·배정 완료 건</p>
             </div>
 
             <div className="bg-black/30 border border-border-dark p-5 rounded-sm relative overflow-hidden">
@@ -712,7 +745,7 @@ export default function AdminDashboard({
                     실제 입금받을 계좌 · 송금링크 · PG 결제 설정
                   </h4>
                   <p className="text-xs text-text-light/55 mt-0.5">
-                    여기에 본인 은행 계좌나 토스/카카오페이 송금 링크를 저장하면, 고객이 요금제 결제 시 즉시 해당 계좌로 송금할 수 있습니다.
+                    여기에 본인 은행 계좌나 토스/카카오페이 송금 링크, 카드 PG 키를 저장하면 방문자가 유료 이용권 결제 시 즉시 카드결제 또는 계좌입금을 진행할 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -832,7 +865,7 @@ export default function AdminDashboard({
               <div className="p-3.5 rounded-sm bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200 flex items-start gap-2.5 leading-relaxed">
                 <Info size={16} className="shrink-0 mt-0.5 text-blue-300" />
                 <div>
-                  <strong>웹 결제 vs 구글 플레이 앱 결제 안내:</strong> 웹사이트(웹 브라우저)에서 테스터 배정 대행 등 서비스를 판매할 때는 위의 계좌이체·간편송금·토스페이먼츠로 바로 정산받으실 수 있습니다. 단, 구글 플레이 스토어에서 다운받은 <strong>안드로이드 앱 내부에서 앱 자체 디지털 기능/구독을 판매</strong>하실 때는 구글 정책상 Google Play Billing(인앱 결제)을 사용해야 합니다.
+                  <strong>웹 결제 vs 구글 플레이 앱 결제 안내:</strong> 웹사이트(웹 브라우저)에서 ANY1 AI 유료 이용권 또는 서비스 상품을 판매할 때는 위의 계좌이체·간편송금·토스페이먼츠로 바로 정산받으실 수 있습니다. 단, 구글 플레이 스토어에서 다운받은 <strong>안드로이드 앱 내부에서 앱 자체 디지털 기능/구독을 판매</strong>하실 때는 구글 정책상 Google Play Billing(인앱 결제)을 사용해야 합니다.
                 </div>
               </div>
 
@@ -888,7 +921,7 @@ export default function AdminDashboard({
                   <option value="all">전체 상태</option>
                   <option value="pending">입금 확인 대기</option>
                   <option value="paid">입금 확인 완료</option>
-                  <option value="completed">배정 완료</option>
+                  <option value="completed">승인/배정 완료</option>
                   <option value="cancelled">취소됨</option>
                 </select>
                 <div className="relative flex-1 md:w-64">
@@ -945,7 +978,9 @@ export default function AdminDashboard({
                           </div>
                         </td>
                         <td className="py-3 px-3">
-                          <div className="font-bold text-white">{order.planId === 'vip_allpass' ? 'VIP 올패스' : '패스트트랙 12'}</div>
+                          <div className="font-bold text-white">
+                            {order.planName || (order.planId === 'vip_allpass' ? 'VIP 올패스' : '패스트트랙 12')}
+                          </div>
                           <div className="font-mono font-black text-neon mt-0.5">
                             {order.amount.toLocaleString()}원
                           </div>
@@ -954,7 +989,9 @@ export default function AdminDashboard({
                           <div className="font-bold text-white">
                             {order.appName}{' '}
                             {order.packageName && (
-                              <span className="font-mono text-[10px] text-text-light/40">({order.packageName})</span>
+                              <span className="font-mono text-[10px] text-text-light/50">
+                                ({order.planId?.startsWith('any1_') ? `메모: ${order.packageName}` : order.packageName})
+                              </span>
                             )}
                           </div>
                           <div className="text-[11px]">
@@ -977,7 +1014,7 @@ export default function AdminDashboard({
                           )}
                           {order.status === 'completed' && (
                             <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                              배정 완료
+                              승인 완료
                             </span>
                           )}
                           {order.status === 'cancelled' && (
@@ -1011,7 +1048,7 @@ export default function AdminDashboard({
                               onClick={() => handleUpdateOrderStatus(order.id, 'completed')}
                               className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500 hover:text-bg-dark text-emerald-300 border border-emerald-500/40 rounded text-[10px] font-bold cursor-pointer transition-colors"
                             >
-                              배정 완료
+                              승인 완료
                             </button>
                             <button
                               type="button"

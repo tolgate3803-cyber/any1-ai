@@ -9,15 +9,23 @@ import TesterMatchHub from './components/TesterMatchHub';
 import AppIconGuideModal from './components/AppIconGuideModal';
 import AndroidBuildSyncGuideModal from './components/AndroidBuildSyncGuideModal';
 import DailyFortuneView from './components/DailyFortuneView';
+import AdBillboard from './components/AdBillboard';
+import SiteMembershipCheckoutModal from './components/SiteMembershipCheckoutModal';
 import { FEATURES } from './types';
-import { Key, Shield, X, Eye, EyeOff, CheckCircle, AlertCircle, Cpu, Search, Smartphone, ArrowRight, Sun, Sparkles, Home } from 'lucide-react';
+import {
+  fetchMembershipStatus,
+  notifyMembershipChanged,
+  setStoredMembershipOrderId,
+  TrialStatus
+} from './utils/membershipClient';
+import { Key, Shield, X, Eye, EyeOff, CheckCircle, AlertCircle, Cpu, Search, Sun, Sparkles, Home, Lock, Unlock, CreditCard, Crown } from 'lucide-react';
 
 const CATEGORY_TABS = [
   { id: 'all', label: '전체' },
   { id: 'fortune', label: '사주·운세·궁합' },
   { id: 'media', label: '음성·요약·글쓰기' },
-  { id: 'travel', label: '여행·생활' },
-  { id: 'business', label: '비즈니스·개발' }
+  { id: 'travel', label: '여행' },
+  { id: 'business', label: '웹·개발' }
 ];
 
 export default function App() {
@@ -30,6 +38,66 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentBanner, setPaymentBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isTesterHubUnlocked, setIsTesterHubUnlocked] = useState(false);
+  const [isAdBoardUnlocked, setIsAdBoardUnlocked] = useState(false);
+  const [verifiedAdminPassword, setVerifiedAdminPassword] = useState('');
+  const [pendingLockTarget, setPendingLockTarget] = useState<'tester-hub' | 'ad-board' | null>(null);
+  const [lockPasswordInput, setLockPasswordInput] = useState('');
+  const [lockAuthError, setLockAuthError] = useState('');
+  const [lockAuthLoading, setLockAuthLoading] = useState(false);
+  const [showLockPassword, setShowLockPassword] = useState(false);
+  const [isSiteCheckoutOpen, setIsSiteCheckoutOpen] = useState(false);
+  const [siteCheckoutInitialMode, setSiteCheckoutInitialMode] = useState<'checkout' | 'lookup'>('checkout');
+  const [upgradeReason, setUpgradeReason] = useState<'exhausted' | 'voluntary' | null>(null);
+  const [upgradeFeatureTitle, setUpgradeFeatureTitle] = useState<string | undefined>(undefined);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus>({
+    freeTrialLimit: 3,
+    freeUsed: 0,
+    freeRemaining: 3,
+    membership: null
+  });
+
+  // Sync visitor trial quota & active paid membership with server
+  useEffect(() => {
+    let active = true;
+    const syncMembership = async () => {
+      const next = await fetchMembershipStatus();
+      if (active && next) {
+        setTrialStatus(next);
+      }
+    };
+    void syncMembership();
+
+    const onTrial = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      setTrialStatus((prev) => ({
+        ...prev,
+        freeTrialLimit: detail.freeTrialLimit ?? prev.freeTrialLimit,
+        freeUsed: detail.freeUsed ?? prev.freeUsed,
+        freeRemaining: detail.freeRemaining ?? prev.freeRemaining
+      }));
+    };
+    const onMembership = () => {
+      void syncMembership();
+    };
+    const onOpenUpgrade = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      setUpgradeReason(detail.reason === 'exhausted' ? 'exhausted' : 'voluntary');
+      setUpgradeFeatureTitle(detail.featureTitle);
+      setSiteCheckoutInitialMode('checkout');
+      setIsSiteCheckoutOpen(true);
+    };
+
+    window.addEventListener('any1:trial-updated', onTrial);
+    window.addEventListener('any1:membership-changed', onMembership);
+    window.addEventListener('any1:open-upgrade', onOpenUpgrade);
+    return () => {
+      active = false;
+      window.removeEventListener('any1:trial-updated', onTrial);
+      window.removeEventListener('any1:membership-changed', onMembership);
+      window.removeEventListener('any1:open-upgrade', onOpenUpgrade);
+    };
+  }, []);
 
   // Catch PWA beforeinstallprompt event for 1-click install
   useEffect(() => {
@@ -106,9 +174,11 @@ export default function App() {
             .then((r) => r.json().then((d) => ({ ok: r.ok, data: d })))
             .then(({ ok, data }) => {
               if (ok && data.success) {
+                setStoredMembershipOrderId(orderId);
+                notifyMembershipChanged();
                 setPaymentBanner({
                   type: 'success',
-                  message: `카드/PG 결제가 최종 승인되었습니다! (주문번호: ${orderId})`
+                  message: `카드/PG 결제가 최종 승인되어 유료 이용권이 즉시 활성화되었습니다! (주문번호: ${orderId})`
                 });
               } else {
                 setPaymentBanner({
@@ -181,6 +251,58 @@ export default function App() {
     setIsAuthModalOpen(false);
   };
 
+  const handleOpenProtectedSection = (target: 'tester-hub' | 'ad-board') => {
+    if (target === 'tester-hub' && isTesterHubUnlocked) {
+      setActiveId('tester-hub');
+      return;
+    }
+    if (target === 'ad-board' && isAdBoardUnlocked) {
+      setActiveId('ad-board');
+      return;
+    }
+    setLockPasswordInput('');
+    setLockAuthError('');
+    setShowLockPassword(false);
+    setPendingLockTarget(target);
+  };
+
+  const handleVerifyProtectedPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingLockTarget) return;
+    if (!lockPasswordInput.trim()) {
+      setLockAuthError('비밀번호를 입력해 주세요.');
+      return;
+    }
+    setLockAuthLoading(true);
+    setLockAuthError('');
+    try {
+      const res = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: lockPasswordInput })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const target = pendingLockTarget;
+        setVerifiedAdminPassword(lockPasswordInput);
+        if (target === 'ad-board') {
+          setIsAdBoardUnlocked(true);
+        } else {
+          setIsTesterHubUnlocked(true);
+        }
+        setPendingLockTarget(null);
+        setLockPasswordInput('');
+        setActiveId(target);
+      } else {
+        setLockAuthError(data.error || '비밀번호가 일치하지 않습니다.');
+      }
+    } catch {
+      setLockAuthError('서버와 통신하지 못했습니다.');
+    } finally {
+      setLockAuthLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-bg-dark font-sans text-text-light selection:bg-neon selection:text-bg-dark">
       <Sidebar activeId={activeId} onSelect={setActiveId} />
@@ -213,14 +335,37 @@ export default function App() {
             )}
             <button
               onClick={() => setActiveId('daily-fortune')}
-              className="px-3 py-1.5 bg-neon/10 hover:bg-neon/20 text-neon border border-neon/30 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-neon/10 hover:bg-neon/20 text-neon border border-neon/30 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Sun size={13} />
               <span>오늘의 운세</span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUpgradeReason('voluntary');
+                setUpgradeFeatureTitle(undefined);
+                setSiteCheckoutInitialMode(trialStatus.membership?.active ? 'lookup' : 'checkout');
+                setIsSiteCheckoutOpen(true);
+              }}
+              className={`px-3 py-1.5 border rounded-md transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
+                trialStatus.membership?.active
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40'
+                  : 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border-amber-400/40'
+              }`}
+            >
+              {trialStatus.membership?.active ? <Crown size={13} /> : <CreditCard size={13} />}
+              <span>
+                {trialStatus.membership?.active
+                  ? '유료 이용권 사용 중'
+                  : savedApiKey
+                    ? '이용권 결제'
+                    : `이용권 결제 · 무료 ${trialStatus.freeRemaining}회`}
+              </span>
+            </button>
             <button 
               onClick={() => setIsAuthModalOpen(true)}
-              className={`px-3 py-1.5 transition-colors font-bold rounded-md flex items-center gap-1.5 border cursor-pointer ${
+              className={`px-3 py-1.5 transition-colors font-bold rounded-md flex items-center gap-1.5 border cursor-pointer whitespace-nowrap shrink-0 ${
                 savedApiKey 
                   ? 'bg-neon/10 text-neon border-neon/50 hover:bg-neon hover:text-bg-dark' 
                   : 'bg-white/5 text-text-light/75 border-border-dark hover:border-neon/40 hover:text-white'
@@ -228,6 +373,32 @@ export default function App() {
             >
               <Key size={12} />
               <span className="hidden sm:inline">{savedApiKey ? 'API 키 관리' : 'AI 설정'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenProtectedSection('ad-board')}
+              title="광고판 · 홍보 영상 관리 (관리자 전용)"
+              className={`px-2.5 py-1.5 transition-colors font-bold rounded-md flex items-center gap-1 border cursor-pointer whitespace-nowrap shrink-0 ${
+                activeId === 'ad-board'
+                  ? 'bg-neon text-bg-dark border-neon'
+                  : 'bg-transparent text-text-light/40 hover:text-neon border-transparent hover:border-border-dark'
+              }`}
+            >
+              {isAdBoardUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
+              <span>광고판</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenProtectedSection('tester-hub')}
+              title="테스터 매칭 마이페이지 (관리자 전용)"
+              className={`px-2.5 py-1.5 transition-colors font-bold rounded-md flex items-center gap-1 border cursor-pointer whitespace-nowrap shrink-0 ${
+                activeId === 'tester-hub'
+                  ? 'bg-neon text-bg-dark border-neon'
+                  : 'bg-transparent text-text-light/40 hover:text-neon border-transparent hover:border-border-dark'
+              }`}
+            >
+              {isTesterHubUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
+              <span>품앗이</span>
             </button>
           </div>
         </header>
@@ -295,7 +466,42 @@ export default function App() {
                         <Sparkles size={15} className="text-neon" />
                         <span>평생 정밀 사주 보기</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUpgradeReason('voluntary');
+                          setUpgradeFeatureTitle(undefined);
+                          setSiteCheckoutInitialMode('checkout');
+                          setIsSiteCheckoutOpen(true);
+                        }}
+                        className="px-5 py-3 bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 border border-amber-400/45 font-black text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <CreditCard size={15} className="text-amber-300" />
+                        <span>유료 이용권 · 카드/계좌결제</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUpgradeReason(null);
+                          setUpgradeFeatureTitle(undefined);
+                          setSiteCheckoutInitialMode('lookup');
+                          setIsSiteCheckoutOpen(true);
+                        }}
+                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-text-light/80 hover:text-white border border-border-dark font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Search size={14} className="text-neon" />
+                        <span>결제 · 이용권 인증</span>
+                      </button>
                     </div>
+                    <p className="text-[11px] text-text-light/55 mt-3.5 leading-relaxed">
+                      <span className="text-emerald-300 font-bold">상시 무료:</span> 오늘의 운세 &amp; 궁합 ·{' '}
+                      <span className="text-amber-300 font-bold">무료 3회 체험 후 유료 전환:</span> 정밀 사주·작명·관상·풍수·AI 성우·문서요약·여행비서
+                      {!trialStatus.membership?.active && !savedApiKey && (
+                        <span className="text-neon font-bold ml-1.5">
+                          (현재 무료 체험 {trialStatus.freeRemaining}/{trialStatus.freeTrialLimit}회 남음)
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div className="relative w-36 h-36 sm:w-44 sm:h-44 flex items-center justify-center shrink-0 self-center md:self-auto">
                     <img 
@@ -305,38 +511,9 @@ export default function App() {
                     />
                   </div>
                 </section>
- 
-                {/* 14-Day Tester Mutual Match Promotion Banner */}
-                <div className="mx-6 sm:mx-10 my-6 p-6 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-bg-card to-blue-950/40 border border-neon/30 shadow-[0_0_25px_rgba(0,243,255,0.12)] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-neon text-bg-dark flex items-center justify-center font-black shrink-0 shadow-[0_0_15px_rgba(0,243,255,0.4)]">
-                      <Smartphone size={24} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-mono text-neon font-bold tracking-widest uppercase bg-neon/15 px-2 py-0.5 rounded border border-neon/30">
-                          NEW ENGINE
-                        </span>
-                        <h2 className="text-base sm:text-lg font-black text-white">
-                          테스터 매칭 마이페이지 & 14일 자동 품앗이 센터
-                        </h2>
-                      </div>
-                      <p className="text-xs text-text-light/70 max-w-2xl leading-relaxed">
-                        개인 개발자 12명 14일 비공개 테스트 규정 완벽 대응! 내 앱을 30초 만에 등록하고, 동료 개발자의 앱 일일 실행 체크리스트를 한눈에 관리하세요.
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
-                    <button
-                      onClick={() => setActiveId('tester-hub')}
-                      className="w-full sm:w-auto px-5 py-3 bg-neon hover:bg-cyan-300 text-bg-dark font-black text-xs rounded-xl transition-all shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-center justify-center gap-2 group cursor-pointer"
-                    >
-                      <span>테스터 매칭 마이페이지 바로가기</span>
-                      <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  </div>
-                </div>
+                {/* Live Video & Copy Ad Billboard */}
+                <AdBillboard mode="dashboard" />
 
                 {/* Category Filter and Quick Search Controls */}
                 <div className="px-10 py-6 border-b border-border-dark bg-white/[0.01] flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
@@ -473,6 +650,69 @@ export default function App() {
                   </div>
                 </footer>
               </motion.div>
+            ) : activeId === 'ad-board' ? (
+              <motion.div
+                key="ad-board"
+                initial={{ opacity: 0, scale: 0.99 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.01 }}
+                className="p-6 sm:p-10 flex-grow"
+              >
+                {isAdBoardUnlocked ? (
+                  <div className="space-y-4">
+                    <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-bold text-neon flex items-center gap-1.5">
+                        <Unlock size={12} />
+                        <span>관리자 전용 비공개 페이지</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAdBoardUnlocked(false);
+                          setActiveId('dashboard');
+                        }}
+                        className="px-3 py-1.5 text-[11px] font-bold text-text-light/70 hover:text-neon border border-border-dark hover:border-neon/40 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Lock size={11} />
+                        <span>다시 잠그기</span>
+                      </button>
+                    </div>
+                    <AdBillboard
+                      mode="page"
+                      adminPassword={verifiedAdminPassword}
+                      onBackToDashboard={() => setActiveId('dashboard')}
+                    />
+                  </div>
+                ) : (
+                  <div className="max-w-md mx-auto my-auto p-6 w-full">
+                    <div className="bg-[#0d0f12] border border-border-dark rounded-2xl p-6 text-center space-y-4">
+                      <div className="w-12 h-12 rounded-xl bg-neon/10 border border-neon/40 flex items-center justify-center text-neon mx-auto">
+                        <Lock size={20} />
+                      </div>
+                      <h2 className="text-base font-black text-white">관리자 전용 비공개 페이지입니다</h2>
+                      <p className="text-xs text-text-light/60">
+                        비밀번호를 입력해야 광고판 · 홍보 영상 관리 페이지를 열람할 수 있습니다.
+                      </p>
+                      <div className="flex gap-2 justify-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveId('dashboard')}
+                          className="px-4 py-2 border border-border-dark text-xs font-bold text-text-light/70 hover:text-white rounded-lg cursor-pointer"
+                        >
+                          홈으로 돌아가기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenProtectedSection('ad-board')}
+                          className="px-4 py-2 bg-neon hover:bg-white text-bg-dark text-xs font-black rounded-lg cursor-pointer"
+                        >
+                          비밀번호 입력하기
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
             ) : activeId === 'daily-fortune' ? (
               <motion.div
                 key="daily-fortune"
@@ -491,10 +731,59 @@ export default function App() {
                 exit={{ opacity: 0, scale: 1.01 }}
                 className="flex-grow flex flex-col"
               >
-                <TesterMatchHub
-                  onBackToDashboard={() => setActiveId('dashboard')}
-                  onOpenBuildSyncGuide={() => setIsBuildSyncGuideOpen(true)}
-                />
+                {isTesterHubUnlocked ? (
+                  <>
+                    <div className="px-6 sm:px-10 pt-4 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-bold text-neon flex items-center gap-1.5">
+                        <Unlock size={12} />
+                        <span>관리자 전용 비공개 페이지</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsTesterHubUnlocked(false);
+                          setActiveId('dashboard');
+                        }}
+                        className="px-3 py-1.5 text-[11px] font-bold text-text-light/70 hover:text-neon border border-border-dark hover:border-neon/40 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Lock size={11} />
+                        <span>다시 잠그기</span>
+                      </button>
+                    </div>
+                    <TesterMatchHub
+                      onBackToDashboard={() => setActiveId('dashboard')}
+                      onOpenBuildSyncGuide={() => setIsBuildSyncGuideOpen(true)}
+                    />
+                  </>
+                ) : (
+                  <div className="max-w-md mx-auto my-auto p-6 w-full">
+                    <div className="bg-[#0d0f12] border border-border-dark rounded-2xl p-6 text-center space-y-4">
+                      <div className="w-12 h-12 rounded-xl bg-neon/10 border border-neon/40 flex items-center justify-center text-neon mx-auto">
+                        <Lock size={20} />
+                      </div>
+                      <h2 className="text-base font-black text-white">관리자 전용 비공개 페이지입니다</h2>
+                      <p className="text-xs text-text-light/60">
+                        비밀번호를 입력해야 테스터 매칭 마이페이지(품앗이)를 열람할 수 있습니다.
+                      </p>
+                      <div className="flex gap-2 justify-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveId('dashboard')}
+                          className="px-4 py-2 border border-border-dark text-xs font-bold text-text-light/70 hover:text-white rounded-lg cursor-pointer"
+                        >
+                          홈으로 돌아가기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenProtectedSection('tester-hub')}
+                          className="px-4 py-2 bg-neon hover:bg-white text-bg-dark text-xs font-black rounded-lg cursor-pointer"
+                        >
+                          비밀번호 입력하기
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             ) : activeId === 'admin-dashboard' ? (
               <motion.div
@@ -735,6 +1024,110 @@ export default function App() {
       <AndroidBuildSyncGuideModal
         isOpen={isBuildSyncGuideOpen}
         onClose={() => setIsBuildSyncGuideOpen(false)}
+      />
+
+      {/* Hidden Private Section Password Modal (광고판 / 품앗이) */}
+      <AnimatePresence>
+        {pendingLockTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPendingLockTarget(null)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              className="relative w-full max-w-sm bg-[#0d0f12] border border-border-dark p-6 rounded-2xl shadow-2xl z-10 space-y-5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-neon/10 border border-neon/40 flex items-center justify-center text-neon shrink-0">
+                    <Lock size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white">비공개 관리자 인증</h3>
+                    <p className="text-[11px] text-text-light/55 mt-0.5">
+                      {pendingLockTarget === 'ad-board'
+                        ? '광고판 · 홍보 영상 관리 입장 비밀번호 입력'
+                        : '테스터 매칭 마이페이지(품앗이) 입장 비밀번호 입력'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingLockTarget(null)}
+                  className="text-text-light/50 hover:text-white p-1 rounded-lg cursor-pointer"
+                  aria-label="닫기"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleVerifyProtectedPassword} className="space-y-4">
+                <div className="relative">
+                  <input
+                    type={showLockPassword ? 'text' : 'password'}
+                    autoFocus
+                    value={lockPasswordInput}
+                    onChange={(e) => setLockPasswordInput(e.target.value)}
+                    placeholder="관리자 비밀번호 입력"
+                    className="w-full bg-black/60 border border-border-dark focus:border-neon px-3.5 py-2.5 pr-10 text-sm text-white rounded-lg outline-none font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLockPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-light/50 hover:text-neon cursor-pointer"
+                    aria-label="비밀번호 표시 전환"
+                  >
+                    {showLockPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+
+                {lockAuthError && (
+                  <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-300 flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{lockAuthError}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingLockTarget(null)}
+                    className="flex-1 py-2.5 border border-border-dark text-xs font-bold text-text-light/70 hover:text-white rounded-lg cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={lockAuthLoading}
+                    className="flex-1 py-2.5 bg-neon hover:bg-white text-bg-dark text-xs font-black rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Unlock size={13} />
+                    <span>{lockAuthLoading ? '확인 중...' : '입장하기'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Site Visitor Paid Membership Checkout Modal */}
+      <SiteMembershipCheckoutModal
+        isOpen={isSiteCheckoutOpen}
+        onClose={() => {
+          setIsSiteCheckoutOpen(false);
+          setUpgradeReason(null);
+          setUpgradeFeatureTitle(undefined);
+        }}
+        initialMode={siteCheckoutInitialMode}
+        upgradeReason={upgradeReason}
+        upgradeFeatureTitle={upgradeFeatureTitle}
       />
     </div>
   );

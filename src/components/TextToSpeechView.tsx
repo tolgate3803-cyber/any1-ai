@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getMembershipHeaders, notifyTrialUpdated, openUpgradeCheckout } from '../utils/membershipClient';
 import {
   Volume2,
   Play,
@@ -428,7 +429,8 @@ export default function TextToSpeechView() {
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getMembershipHeaders()
         },
         body: JSON.stringify({
           text: text.trim(),
@@ -440,12 +442,23 @@ export default function TextToSpeechView() {
         })
       });
 
+      if (res.status === 402) {
+        const errJson = await res.json().catch(() => ({}));
+        notifyTrialUpdated({ freeRemaining: 0 });
+        openUpgradeCheckout('exhausted', 'AI 성우 텍스트 낭독');
+        showToast(errJson.error || '무료 체험 3회를 모두 사용하셨습니다. 유료 이용권으로 전환해 주세요.', 'error');
+        return;
+      }
+
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `서버 에러 (${res.status})`);
       }
 
       const data = await res.json();
+      if (data._trial) {
+        notifyTrialUpdated(data._trial);
+      }
       if (!data.audioBase64) {
         throw new Error('음성 데이터 수신에 실패했습니다.');
       }
@@ -578,7 +591,10 @@ export default function TextToSpeechView() {
       const customKey = localStorage.getItem('any1_custom_gemini_api_key') || '';
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getMembershipHeaders()
+        },
         body: JSON.stringify({
           text: text.trim(),
           presetId: activePreset.id,
@@ -589,11 +605,22 @@ export default function TextToSpeechView() {
         })
       });
 
+      if (res.status === 402) {
+        const errJson = await res.json().catch(() => ({}));
+        notifyTrialUpdated({ freeRemaining: 0 });
+        openUpgradeCheckout('exhausted', 'AI 성우 텍스트 낭독');
+        showToast(errJson.error || '무료 체험 3회를 모두 사용하셨습니다. 유료 이용권으로 전환해 주세요.', 'error');
+        return;
+      }
+
       if (!res.ok) {
         throw new Error('오디오 생성 실패');
       }
 
       const data = await res.json();
+      if (data._trial) {
+        notifyTrialUpdated(data._trial);
+      }
       if (!data.audioBase64) throw new Error('오디오 데이터가 없습니다.');
 
       setCurrentAudioBase64(data.audioBase64);

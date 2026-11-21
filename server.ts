@@ -218,11 +218,8 @@ async function startServer() {
     '노래하는 AI 아바타 만들기': '당신은 가상 엔터테인먼트 제작자입니다. 디지털 아바타의 비주얼과 목소리를 조화롭게 구성하여 매력적인 가창 퍼포먼스를 만드는 방법을 안내합니다.',
     '썸네일 편집기': '당신은 클릭을 부르는 디자인을 만드는 시각 디자이너입니다. 사용자의 콘텐츠 주제에 맞춰 가장 눈길을 사로잡는 썸네일 구성, 폰트, 색상 조합을 제안합니다.',
     '게임 생성': '당신은 혁신적인 게임 기획자입니다. 간단한 아이디어를 기반으로 게임의 룰, 캐릭터, 세계관, 레벨 디자인을 체계적으로 설계해 줍니다.',
-    '레시피 제공': '당신은 어떤 재료로도 최고의 요리를 만들어내는 쉐프입니다. 사용자가 가진 재료를 활용해 쉽고 맛있는 레시피를 제안하며, 조리 팁과 플레이팅 방법도 알려줍니다.',
     '물질 분석': '당신은 정밀 분석 장비를 갖춘 과학 분석 전문가입니다. 다양한 성분, 재질, 화합물의 특성과 용도, 위험성 등을 과학적 근거를 바탕으로 상세히 설명합니다.',
     '상품 자동 등록': '당신은 이커머스 운영 전문가입니다. 상품의 이미지와 기본 정보를 바탕으로 고객의 구매 욕구를 자극하는 매력적인 상품명, 상세 페이지 문구, 키워드를 자동으로 생성합니다.',
-    '식물/꽃 식별': '당신은 식물학자이자 정원사입니다. 식물의 명칭, 특징, 꽃말뿐만 아니라 잘 키우기 위한 환경(일조량, 수분 등)에 대한 전문적인 가이드를 제공합니다.',
-    '사업계획서 작성': '당신은 수많은 투자 유치를 성공시킨 경영 컨설턴트입니다. 사업 아이템을 시장 분석, 비즈니스 모델, 마케팅 전략, 재무 계획 등을 포함한 전문적인 사업계획서 초안으로 구성합니다.',
     '프로그램/홈페이지 제작': '당신은 풀스택 소프트웨어 엔지니어입니다. 사용자의 요구사항을 파악하여 적합한 기술 스택을 추천하고, 핵심 로직이나 페이지 구조에 대한 설계 및 코드를 제안합니다.',
     '주식 분석': '당신은 데이터 기반의 금융 분석가입니다. 거시 경제 지표, 기업 재무 제표, 차트 패턴 등을 종합적으로 분석하여 시장의 흐름과 투자 인사이트를 제공합니다. (단, 투자의 최종 책임은 사용자에게 있음을 명시하세요)',
     'AI 동시 통역': '당신은 언어의 장벽을 허무는 베테랑 동시 통역사입니다. 다양한 언어 간의 뉘앙스를 살려 실시간으로 정확하고 매끄러운 통역 서비스를 제공합니다.',
@@ -479,14 +476,56 @@ async function startServer() {
     approvedAt?: string;
   }
 
-  const PLAN_CATALOG: Record<string, { id: string; name: string; price: number }> = {
+  const sanitizeHttpUrl = (raw: unknown): string => {
+    if (typeof raw !== "string") return "";
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    return /^https?:\/\//i.test(trimmed) ? trimmed : "";
+  };
+
+  interface PlanCatalogItem {
+    id: string;
+    category: "site" | "tester";
+    name: string;
+    badge?: string;
+    description?: string;
+    price: number;
+  }
+
+  const PLAN_CATALOG: Record<string, PlanCatalogItem> = {
+    any1_1month: {
+      id: "any1_1month",
+      category: "site",
+      name: "ANY1 AI 1개월 무제한 이용권",
+      badge: "인기",
+      description: "정밀 사주·궁합·작명·관상·풍수지리 + AI 성우·문서요약·여행비서 전 기능 30일 이용",
+      price: 9900
+    },
+    any1_6month: {
+      id: "any1_6month",
+      category: "site",
+      name: "ANY1 AI 6개월 프리미엄 패스",
+      badge: "18% 할인",
+      description: "전 기능 180일 무제한 이용 + 우선 응답 및 맞춤 안내 지원",
+      price: 49000
+    },
+    any1_1year: {
+      id: "any1_1year",
+      category: "site",
+      name: "ANY1 AI 1년 VIP 연간 이용권",
+      badge: "최대 혜택",
+      description: "365일 전 기능 무제한 + 1:1 정밀 맞춤 상담 및 VIP 우선 처리",
+      price: 89000
+    },
     fasttrack12: {
       id: "fasttrack12",
+      category: "tester",
       name: "패스트트랙 12 (12명 전담 실기기 배정)",
       price: 29000
     },
     vip_allpass: {
       id: "vip_allpass",
+      category: "tester",
       name: "VIP 올패스 보증형 (20명 여유 배정 + 반려 시 100% 보증)",
       price: 49000
     }
@@ -498,8 +537,8 @@ async function startServer() {
       accountNumber: "",
       accountHolder: "",
       remittanceUrl: "",
-      contactInfo: "tolgate3803@gmail.com",
-      paymentNotice: "입금 확인 후 10분~1시간 내로 전담 테스터 배정 안내를 이메일 및 연락처로 발송해 드립니다.",
+      contactInfo: "010-2459-9811 / tolgate3803@gmail.com",
+      paymentNotice: "입금 확인 후 이용권 승인 및 안내 메일/연락을 빠르게 보내드립니다.",
       tossClientKey: process.env.TOSS_CLIENT_KEY || "",
       tossSecretKey: process.env.TOSS_SECRET_KEY || ""
     };
@@ -511,6 +550,7 @@ async function startServer() {
           return {
             ...defaults,
             ...raw.paymentConfig,
+            remittanceUrl: sanitizeHttpUrl(raw.paymentConfig.remittanceUrl),
             tossClientKey: raw.paymentConfig.tossClientKey || defaults.tossClientKey,
             tossSecretKey: raw.paymentConfig.tossSecretKey || defaults.tossSecretKey
           };
@@ -533,7 +573,7 @@ async function startServer() {
         bankName: typeof newCfg.bankName === "string" ? newCfg.bankName.trim() : prev.bankName,
         accountNumber: typeof newCfg.accountNumber === "string" ? newCfg.accountNumber.trim() : prev.accountNumber,
         accountHolder: typeof newCfg.accountHolder === "string" ? newCfg.accountHolder.trim() : prev.accountHolder,
-        remittanceUrl: typeof newCfg.remittanceUrl === "string" ? newCfg.remittanceUrl.trim() : prev.remittanceUrl,
+        remittanceUrl: typeof newCfg.remittanceUrl === "string" ? sanitizeHttpUrl(newCfg.remittanceUrl) : prev.remittanceUrl,
         contactInfo: typeof newCfg.contactInfo === "string" ? newCfg.contactInfo.trim() : prev.contactInfo,
         paymentNotice: typeof newCfg.paymentNotice === "string" ? newCfg.paymentNotice.trim() : prev.paymentNotice,
         tossClientKey: typeof newCfg.tossClientKey === "string" ? newCfg.tossClientKey.trim() : prev.tossClientKey,
@@ -569,6 +609,840 @@ async function startServer() {
       return false;
     }
   };
+
+  // =========================================================================
+  // FREEMIUM TRIAL QUOTA & PAID MEMBERSHIP VERIFICATION
+  // =========================================================================
+  const FREE_TRIAL_LIMIT = 3;
+  const TRIAL_USAGE_FILE_PATH = path.join(process.cwd(), "trial_usage.json");
+  const PLAN_DURATION_DAYS: Record<string, number> = {
+    any1_1month: 30,
+    any1_6month: 180,
+    any1_1year: 365
+  };
+
+  interface TrialRecord {
+    count: number;
+    updatedAt: string;
+  }
+
+  const loadTrialUsage = (): Record<string, TrialRecord> => {
+    try {
+      if (fs.existsSync(TRIAL_USAGE_FILE_PATH)) {
+        const parsed = JSON.parse(fs.readFileSync(TRIAL_USAGE_FILE_PATH, "utf-8"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Error loading trial usage:", e);
+    }
+    return {};
+  };
+
+  const saveTrialUsage = (map: Record<string, TrialRecord>) => {
+    try {
+      const entries = Object.entries(map);
+      const bounded =
+        entries.length > 5000
+          ? Object.fromEntries(
+              entries
+                .sort((a, b) => (b[1]?.updatedAt || "").localeCompare(a[1]?.updatedAt || ""))
+                .slice(0, 5000)
+            )
+          : map;
+      fs.writeFileSync(TRIAL_USAGE_FILE_PATH, JSON.stringify(bounded, null, 2), "utf-8");
+    } catch (e) {
+      console.error("Error saving trial usage:", e);
+    }
+  };
+
+  const resolveVisitorKey = (req: express.Request): string => {
+    const cid = String(req.headers["x-any1-client-id"] || "").trim();
+    if (/^[a-zA-Z0-9_-]{8,64}$/.test(cid)) {
+      return `cid:${cid}`;
+    }
+    const rawIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || req.ip || "unknown";
+    const ip = Array.isArray(rawIp) ? rawIp[0] : String(rawIp);
+    return `ip:${ip.split(",")[0].trim()}`;
+  };
+
+  const getFreeTrialStatus = (visitorKey: string) => {
+    const map = loadTrialUsage();
+    const used = Math.max(0, Number(map[visitorKey]?.count) || 0);
+    return {
+      freeTrialLimit: FREE_TRIAL_LIMIT,
+      freeUsed: used,
+      freeRemaining: Math.max(0, FREE_TRIAL_LIMIT - used)
+    };
+  };
+
+  const incrementFreeTrial = (visitorKey: string) => {
+    const map = loadTrialUsage();
+    const prev = Math.max(0, Number(map[visitorKey]?.count) || 0);
+    const next = prev + 1;
+    map[visitorKey] = { count: next, updatedAt: new Date().toISOString() };
+    saveTrialUsage(map);
+    return {
+      freeTrialLimit: FREE_TRIAL_LIMIT,
+      freeUsed: next,
+      freeRemaining: Math.max(0, FREE_TRIAL_LIMIT - next)
+    };
+  };
+
+  const verifySiteMembershipPass = ({
+    orderId,
+    email
+  }: {
+    orderId?: string;
+    email?: string;
+  }): {
+    status: "active" | "pending" | "expired" | "cancelled" | "not_found";
+    membership?: {
+      active: boolean;
+      orderId: string;
+      planId: string;
+      planName: string;
+      depositorName: string;
+      expiresAt: string;
+    };
+    order?: OrderRecord;
+  } => {
+    const normOrderId = String(orderId || "").trim().toUpperCase();
+    const normEmail = String(email || "").trim().toLowerCase();
+    if (!normOrderId && !normEmail) {
+      return { status: "not_found" };
+    }
+
+    const orders = loadOrders().filter((o) => {
+      const plan = PLAN_CATALOG[o.planId];
+      return plan?.category === "site" || Boolean(PLAN_DURATION_DAYS[o.planId]);
+    });
+
+    const candidates = orders.filter((o) => {
+      if (normOrderId && o.id.toUpperCase() === normOrderId) return true;
+      if (!normOrderId && normEmail && o.email.toLowerCase() === normEmail) return true;
+      return false;
+    });
+
+    if (candidates.length === 0) {
+      return { status: "not_found" };
+    }
+
+    // Prefer most recent active/paid order first
+    const ordered = [...candidates].sort((a, b) => {
+      const score = (s: OrderRecord["status"]) =>
+        s === "completed" || s === "paid" ? 2 : s === "pending" ? 1 : 0;
+      const diff = score(b.status) - score(a.status);
+      if (diff !== 0) return diff;
+      return (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt);
+    });
+
+    const match = ordered[0];
+    if (match.status === "cancelled") {
+      return { status: "cancelled", order: match };
+    }
+    if (match.status === "pending") {
+      return { status: "pending", order: match };
+    }
+
+    const durationDays = PLAN_DURATION_DAYS[match.planId] || 30;
+    const baseMs = new Date(match.approvedAt || match.updatedAt || match.createdAt).getTime();
+    const expiresAtMs = baseMs + durationDays * 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs) {
+      return { status: "expired", order: match };
+    }
+
+    return {
+      status: "active",
+      order: match,
+      membership: {
+        active: true,
+        orderId: match.id,
+        planId: match.planId,
+        planName: match.planName,
+        depositorName: match.depositorName,
+        expiresAt: new Date(expiresAtMs).toISOString()
+      }
+    };
+  };
+
+  const evaluateAiAccess = (req: express.Request, customApiKey?: unknown) => {
+    if (typeof customApiKey === "string" && customApiKey.trim() !== "") {
+      return { allowed: true as const, bypassTrial: true as const };
+    }
+    const adminHeader = String(req.headers["x-any1-admin-pass"] || "");
+    if (adminHeader && adminHeader === getAdminPassword()) {
+      return { allowed: true as const, bypassTrial: true as const };
+    }
+    const orderHeader = String(req.headers["x-any1-membership-order"] || req.body?.membershipOrderId || "").trim();
+    if (orderHeader) {
+      const verified = verifySiteMembershipPass({ orderId: orderHeader });
+      if (verified.status === "active" && verified.membership) {
+        return { allowed: true as const, bypassTrial: true as const, membership: verified.membership };
+      }
+    }
+    const visitorKey = resolveVisitorKey(req);
+    const trial = getFreeTrialStatus(visitorKey);
+    if (trial.freeRemaining <= 0) {
+      return { allowed: false as const, visitorKey, trial };
+    }
+    return { allowed: true as const, bypassTrial: false as const, visitorKey, trial };
+  };
+
+  // =========================================================================
+  // AD BILLBOARD PERSISTENCE & MEDIA UPLOAD HELPERS
+  // =========================================================================
+  const ADS_FILE_PATH = path.join(process.cwd(), "ads.json");
+  const AD_UPLOADS_DIR = path.join(process.cwd(), "uploads", "ads");
+
+  if (!fs.existsSync(AD_UPLOADS_DIR)) {
+    fs.mkdirSync(AD_UPLOADS_DIR, { recursive: true });
+  }
+
+  app.use(
+    "/uploads/ads",
+    express.static(AD_UPLOADS_DIR, {
+      acceptRanges: true,
+      maxAge: "1d"
+    })
+  );
+
+  interface AdItem {
+    id: string;
+    badge: string;
+    title: string;
+    description: string;
+    tickerText: string;
+    mediaType: "video" | "youtube" | "image" | "text";
+    mediaUrl: string;
+    linkUrl: string;
+    linkLabel: string;
+    accentColor: "lime" | "cyan" | "amber" | "rose";
+    aspectMode?: "blur16x9" | "crop16x9" | "original";
+    isActive: boolean;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  const DEFAULT_PROMO_ADS: AdItem[] = [
+    {
+      id: "AD-ANY1-PROMO-DEFAULT",
+      badge: "추천 홍보",
+      title: "",
+      description:
+        "저희 사이트를 방문해 주셔서 감사합니다 \n궁합및 사주보기  작명 (이름짖기)  관상보기  풍수지리등을 모두볼수 있는 곳입니다\n그리고 AI로 할수 있는 여러 기능들을 사용할수 있는 곳입니다",
+      tickerText: "문의 010-2459-9811",
+      mediaType: "video",
+      mediaUrl: "/promo-any1.mp4",
+      linkUrl: "",
+      linkLabel: "자세히 보기",
+      accentColor: "lime",
+      aspectMode: "blur16x9",
+      isActive: true,
+      order: 0,
+      createdAt: "2026-11-21T00:29:00.020Z",
+      updatedAt: "2026-11-21T00:29:00.020Z"
+    }
+  ];
+
+  const loadAds = (): AdItem[] => {
+    try {
+      if (fs.existsSync(ADS_FILE_PATH)) {
+        const raw = fs.readFileSync(ADS_FILE_PATH, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Error loading ads:", e);
+    }
+    return [...DEFAULT_PROMO_ADS];
+  };
+
+  const saveAds = (ads: AdItem[]): boolean => {
+    try {
+      fs.writeFileSync(ADS_FILE_PATH, JSON.stringify(ads, null, 2), "utf-8");
+      return true;
+    } catch (e) {
+      console.error("Error saving ads:", e);
+      return false;
+    }
+  };
+
+  const sanitizeAdUrl = (rawUrl: unknown, allowRelativeUploads = false): string => {
+    if (typeof rawUrl !== "string") return "";
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return "";
+    if (
+      allowRelativeUploads &&
+      (trimmed.startsWith("/uploads/ads/") || trimmed === "/promo-any1.mp4")
+    ) {
+      return trimmed;
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+    return "";
+  };
+
+  const extractYoutubeId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/i
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) return match[1];
+    }
+    return null;
+  };
+
+  const deleteLocalAdMediaIfUnused = (mediaUrl: string, remainingAds: AdItem[]) => {
+    if (!mediaUrl || !mediaUrl.startsWith("/uploads/ads/")) return;
+    const stillUsed = remainingAds.some((item) => item.mediaUrl === mediaUrl);
+    if (stillUsed) return;
+    try {
+      const fileName = path.basename(mediaUrl);
+      const targetPath = path.join(AD_UPLOADS_DIR, fileName);
+      if (targetPath.startsWith(AD_UPLOADS_DIR) && fs.existsSync(targetPath)) {
+        fs.unlinkSync(targetPath);
+      }
+    } catch (err) {
+      console.warn("Failed to cleanup local ad media:", err);
+    }
+  };
+
+  const ALLOWED_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".m4v", ".mkv", ".3gp", ".avi", ".ogg"]);
+  const ALLOWED_IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
+  const detectMediaFileType = (rawFileName: string, mimeHint: string) => {
+    const originalExt = path.extname(rawFileName).toLowerCase().replace(/[^a-z0-9.]/g, "");
+    const lowerMime = mimeHint.toLowerCase();
+
+    if (ALLOWED_IMAGE_EXTS.has(originalExt) || lowerMime.startsWith("image/")) {
+      let ext = ALLOWED_IMAGE_EXTS.has(originalExt) ? originalExt : ".jpg";
+      if (!ALLOWED_IMAGE_EXTS.has(originalExt)) {
+        if (lowerMime.includes("png")) ext = ".png";
+        else if (lowerMime.includes("webp")) ext = ".webp";
+        else if (lowerMime.includes("gif")) ext = ".gif";
+      }
+      return { ok: true as const, mediaType: "image" as const, ext };
+    }
+
+    if (ALLOWED_VIDEO_EXTS.has(originalExt) || lowerMime.startsWith("video/") || lowerMime === "application/octet-stream" || !lowerMime) {
+      let ext = ALLOWED_VIDEO_EXTS.has(originalExt) ? originalExt : ".mp4";
+      if (!ALLOWED_VIDEO_EXTS.has(originalExt)) {
+        if (lowerMime.includes("webm")) ext = ".webm";
+        else if (lowerMime.includes("quicktime")) ext = ".mov";
+        else if (lowerMime.includes("x-matroska")) ext = ".mkv";
+        else if (lowerMime.includes("3gpp")) ext = ".3gp";
+      }
+      if (ALLOWED_VIDEO_EXTS.has(originalExt) || lowerMime.startsWith("video/")) {
+        return { ok: true as const, mediaType: "video" as const, ext };
+      }
+    }
+
+    return { ok: false as const };
+  };
+
+  const probeVideoInfo = (inputPath: string): Promise<{ width: number; height: number; codec: string } | null> => {
+    return new Promise((resolve) => {
+      try {
+        const fp = spawn("ffprobe", [
+          "-v", "error",
+          "-select_streams", "v:0",
+          "-show_entries", "stream=width,height,codec_name:stream_tags=rotate:stream_side_data=rotation",
+          "-of", "json",
+          inputPath
+        ]);
+        const outChunks: Buffer[] = [];
+        fp.stdout.on("data", (d: Buffer) => outChunks.push(d));
+        fp.on("error", () => resolve(null));
+        fp.on("close", (code) => {
+          if (code !== 0) return resolve(null);
+          try {
+            const parsed = JSON.parse(Buffer.concat(outChunks).toString("utf-8"));
+            const stream = parsed?.streams?.[0];
+            if (!stream) return resolve(null);
+            let width = Number(stream.width) || 0;
+            let height = Number(stream.height) || 0;
+            const tagRotate = Number(stream.tags?.rotate || 0);
+            const sideRotate = Number(stream.side_data_list?.find((s: any) => s?.rotation !== undefined)?.rotation || 0);
+            const rotation = Math.abs(tagRotate || sideRotate);
+            if (rotation === 90 || rotation === 270) {
+              const tmp = width;
+              width = height;
+              height = tmp;
+            }
+            resolve({ width, height, codec: String(stream.codec_name || "").toLowerCase() });
+          } catch {
+            resolve(null);
+          }
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+  };
+
+  const transcodeVideoTo16x9 = (
+    inputPath: string,
+    outputPath: string,
+    fitMode: "blur" | "crop"
+  ): Promise<boolean> => {
+    return new Promise((resolve) => {
+      try {
+        const filterComplex =
+          fitMode === "crop"
+            ? "[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,setsar=1,format=yuv420p[v]"
+            : "[0:v]scale=320:180:force_original_aspect_ratio=increase,crop=320:180,boxblur=8:2,scale=1280:720:flags=bilinear[bg];[0:v]scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p[v]";
+
+        const ff = spawn("ffmpeg", [
+          "-i", inputPath,
+          "-filter_complex", filterComplex,
+          "-map", "[v]",
+          "-map", "0:a?",
+          "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "24",
+          "-pix_fmt", "yuv420p",
+          "-c:a", "aac",
+          "-b:a", "128k",
+          "-movflags", "+faststart",
+          "-y",
+          outputPath
+        ]);
+
+        let settled = false;
+        const killTimer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            try { ff.kill("SIGKILL"); } catch {}
+            resolve(false);
+          }
+        }, 120000);
+
+        ff.on("error", () => {
+          clearTimeout(killTimer);
+          if (!settled) {
+            settled = true;
+            resolve(false);
+          }
+        });
+
+        ff.on("close", (code) => {
+          clearTimeout(killTimer);
+          if (!settled) {
+            settled = true;
+            resolve(code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0);
+          }
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  };
+
+  // Public: get active ads sorted by order
+  app.get("/api/ads", (_req, res) => {
+    try {
+      const ads = loadAds()
+        .filter((ad) => ad.isActive)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      res.json({ success: true, ads });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "광고 목록을 불러오지 못했습니다." });
+    }
+  });
+
+  // Admin: list all ads (including hidden)
+  app.post("/api/admin/ads/list", (req, res) => {
+    try {
+      const { password } = req.body;
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+      const ads = loadAds().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      res.json({ success: true, ads });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "광고 목록 조회 실패" });
+    }
+  });
+
+  // Admin: chunked upload step 1 (keeps every HTTP request small to bypass proxy size limits)
+  app.post(
+    "/api/admin/ads/upload-chunk",
+    express.raw({ type: "*/*", limit: "6mb" }),
+    (req, res) => {
+      try {
+        const password = String(req.headers["x-admin-password"] || "");
+        if (password !== getAdminPassword()) {
+          return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+        }
+
+        const uploadId = String(req.headers["x-upload-id"] || "").replace(/[^a-zA-Z0-9_-]/g, "");
+        const chunkIndex = Number(req.headers["x-chunk-index"]);
+        if (!uploadId || !Number.isInteger(chunkIndex) || chunkIndex < 0) {
+          return res.status(400).json({ error: "잘못된 업로드 조각 정보입니다." });
+        }
+
+        const buffer = req.body;
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+          return res.status(400).json({ error: "업로드 데이터가 비어 있습니다." });
+        }
+
+        if (!fs.existsSync(AD_UPLOADS_DIR)) {
+          fs.mkdirSync(AD_UPLOADS_DIR, { recursive: true });
+        }
+
+        const tmpPath = path.join(AD_UPLOADS_DIR, `.tmp_${uploadId}`);
+        if (chunkIndex === 0) {
+          fs.writeFileSync(tmpPath, buffer);
+        } else {
+          fs.appendFileSync(tmpPath, buffer);
+        }
+
+        res.json({ success: true, chunkIndex, receivedBytes: buffer.length });
+      } catch (err: any) {
+        console.error("Chunk upload error:", err);
+        res.status(500).json({ error: err.message || "조각 업로드 중 오류가 발생했습니다." });
+      }
+    }
+  );
+
+  // Admin: chunked upload step 2 (finalize file & auto-convert 9:16 portrait video to 16:9)
+  app.post("/api/admin/ads/upload-complete", async (req, res) => {
+    try {
+      const { password, uploadId, fileName, fileType, fitMode } = req.body;
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+
+      const safeUploadId = String(uploadId || "").replace(/[^a-zA-Z0-9_-]/g, "");
+      const tmpPath = path.join(AD_UPLOADS_DIR, `.tmp_${safeUploadId}`);
+      if (!safeUploadId || !fs.existsSync(tmpPath)) {
+        return res.status(400).json({ error: "임시 업로드 파일을 찾을 수 없습니다. 다시 시도해 주세요." });
+      }
+
+      const rawFileName = String(fileName || "video.mp4");
+      const detected = detectMediaFileType(rawFileName, String(fileType || ""));
+      if (!detected.ok) {
+        try { fs.unlinkSync(tmpPath); } catch {}
+        return res.status(400).json({
+          error: "지원하지 않는 파일 형식입니다. MP4/MOV/WEBM 동영상 또는 JPG/PNG 이미지를 올려주세요."
+        });
+      }
+
+      const baseId = `ad_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const rawFinalName = `${baseId}${detected.ext}`;
+      const rawFinalPath = path.join(AD_UPLOADS_DIR, rawFinalName);
+      fs.renameSync(tmpPath, rawFinalPath);
+
+      let finalUrl = `/uploads/ads/${rawFinalName}`;
+      let converted16x9 = false;
+      const requestedFit: "blur" | "crop" | "original" =
+        fitMode === "crop" || fitMode === "original" ? fitMode : "blur";
+
+      if (detected.mediaType === "video" && requestedFit !== "original") {
+        const info = await probeVideoInfo(rawFinalPath);
+        const aspect = info && info.height > 0 ? info.width / info.height : 0;
+        const needsAspectOrCodecFix =
+          !info ||
+          aspect < 1.55 ||
+          aspect > 2.0 ||
+          detected.ext !== ".mp4" ||
+          (info.codec !== "h264" && info.codec !== "avc1");
+
+        if (needsAspectOrCodecFix) {
+          const outName = `${baseId}_16x9.mp4`;
+          const outPath = path.join(AD_UPLOADS_DIR, outName);
+          const ok = await transcodeVideoTo16x9(rawFinalPath, outPath, requestedFit);
+          if (ok) {
+            try { fs.unlinkSync(rawFinalPath); } catch {}
+            finalUrl = `/uploads/ads/${outName}`;
+            converted16x9 = true;
+          }
+        }
+      }
+
+      const finalFilePath = path.join(AD_UPLOADS_DIR, path.basename(finalUrl));
+      const finalSize = fs.existsSync(finalFilePath) ? fs.statSync(finalFilePath).size : 0;
+
+      res.json({
+        success: true,
+        url: finalUrl,
+        mediaType: detected.mediaType,
+        fileName: rawFileName,
+        size: finalSize,
+        converted16x9,
+        aspectMode:
+          requestedFit === "original"
+            ? "original"
+            : requestedFit === "crop"
+              ? "crop16x9"
+              : "blur16x9"
+      });
+    } catch (err: any) {
+      console.error("Upload complete error:", err);
+      res.status(500).json({ error: err.message || "업로드 마무리 중 오류가 발생했습니다." });
+    }
+  });
+
+  // Admin: direct single-request upload (kept for small files / compatibility)
+  app.post(
+    "/api/admin/ads/upload",
+    express.raw({ type: "*/*", limit: "30mb" }),
+    (req, res) => {
+      try {
+        const password = String(req.headers["x-admin-password"] || "");
+        if (password !== getAdminPassword()) {
+          return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+        }
+
+        const buffer = req.body;
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+          return res.status(400).json({ error: "업로드된 파일 데이터가 비어 있습니다." });
+        }
+
+        let rawFileName = "media.mp4";
+        try {
+          rawFileName = decodeURIComponent(String(req.headers["x-file-name"] || "media.mp4"));
+        } catch {
+          rawFileName = String(req.headers["x-file-name"] || "media.mp4");
+        }
+
+        const detected = detectMediaFileType(rawFileName, String(req.headers["x-file-type"] || ""));
+        if (!detected.ok) {
+          return res.status(400).json({
+            error: "지원하지 않는 파일 형식입니다. MP4/MOV/WEBM 동영상 또는 JPG/PNG 이미지를 올려주세요."
+          });
+        }
+
+        if (!fs.existsSync(AD_UPLOADS_DIR)) {
+          fs.mkdirSync(AD_UPLOADS_DIR, { recursive: true });
+        }
+
+        const safeFileName = `ad_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${detected.ext}`;
+        const destPath = path.join(AD_UPLOADS_DIR, safeFileName);
+        fs.writeFileSync(destPath, buffer);
+
+        res.json({
+          success: true,
+          url: `/uploads/ads/${safeFileName}`,
+          mediaType: detected.mediaType,
+          fileName: rawFileName,
+          size: buffer.length
+        });
+      } catch (err: any) {
+        console.error("Ad media upload error:", err);
+        res.status(500).json({ error: err.message || "파일 업로드 중 오류가 발생했습니다." });
+      }
+    }
+  );
+
+  // Admin: create a new ad item
+  app.post("/api/admin/ads", (req, res) => {
+    try {
+      const { password, ad } = req.body;
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+
+      const title = String(ad?.title || "").trim();
+      const description = String(ad?.description || "").trim();
+      const rawMediaUrl = sanitizeAdUrl(ad?.mediaUrl, true);
+      if (!title && !description && !rawMediaUrl) {
+        return res.status(400).json({ error: "광고 문구나 동영상(이미지) 중 최소 1개 이상 입력해 주세요." });
+      }
+
+      let mediaType: AdItem["mediaType"] =
+        ad?.mediaType === "video" || ad?.mediaType === "youtube" || ad?.mediaType === "image" || ad?.mediaType === "text"
+          ? ad.mediaType
+          : "text";
+
+      if (rawMediaUrl) {
+        const ytId = extractYoutubeId(rawMediaUrl);
+        if (ytId) {
+          mediaType = "youtube";
+        } else if (mediaType === "text") {
+          mediaType = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(rawMediaUrl) ? "image" : "video";
+        }
+      } else {
+        mediaType = "text";
+      }
+
+      const allowedColors: AdItem["accentColor"][] = ["lime", "cyan", "amber", "rose"];
+      const accentColor: AdItem["accentColor"] = allowedColors.includes(ad?.accentColor)
+        ? ad.accentColor
+        : "lime";
+      const allowedAspects: NonNullable<AdItem["aspectMode"]>[] = ["blur16x9", "crop16x9", "original"];
+      const aspectMode: NonNullable<AdItem["aspectMode"]> = allowedAspects.includes(ad?.aspectMode)
+        ? ad.aspectMode
+        : "blur16x9";
+
+      const ads = loadAds();
+      const nowIso = new Date().toISOString();
+      const newAd: AdItem = {
+        id: `AD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        badge: String(ad?.badge || "추천 홍보").trim().slice(0, 20) || "추천 홍보",
+        title: title.slice(0, 120),
+        description: description.slice(0, 600),
+        tickerText: String(ad?.tickerText || "").trim().slice(0, 200),
+        mediaType,
+        mediaUrl: rawMediaUrl,
+        linkUrl: sanitizeAdUrl(ad?.linkUrl, false),
+        linkLabel: String(ad?.linkLabel || "자세히 보기").trim().slice(0, 30) || "자세히 보기",
+        accentColor,
+        aspectMode,
+        isActive: ad?.isActive !== false,
+        order: 0,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      };
+
+      const nextAds = [newAd, ...ads].map((item, idx) => ({ ...item, order: idx }));
+      saveAds(nextAds);
+
+      res.json({ success: true, ad: newAd, ads: nextAds });
+    } catch (err: any) {
+      console.error("Create ad error:", err);
+      res.status(500).json({ error: err.message || "광고 등록 중 오류가 발생했습니다." });
+    }
+  });
+
+  // Admin: update existing ad item
+  app.put("/api/admin/ads/:id", (req, res) => {
+    try {
+      const { password, ad } = req.body;
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+
+      const ads = loadAds();
+      const idx = ads.findIndex((item) => item.id === req.params.id);
+      if (idx === -1) {
+        return res.status(404).json({ error: "수정할 광고를 찾을 수 없습니다." });
+      }
+
+      const prev = ads[idx];
+      const nextMediaUrl =
+        ad?.mediaUrl !== undefined ? sanitizeAdUrl(ad.mediaUrl, true) : prev.mediaUrl;
+
+      let nextMediaType: AdItem["mediaType"] =
+        ad?.mediaType === "video" || ad?.mediaType === "youtube" || ad?.mediaType === "image" || ad?.mediaType === "text"
+          ? ad.mediaType
+          : prev.mediaType;
+
+      if (nextMediaUrl) {
+        if (extractYoutubeId(nextMediaUrl)) {
+          nextMediaType = "youtube";
+        } else if (nextMediaType === "text") {
+          nextMediaType = /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(nextMediaUrl) ? "image" : "video";
+        }
+      } else {
+        nextMediaType = "text";
+      }
+
+      const allowedColors: AdItem["accentColor"][] = ["lime", "cyan", "amber", "rose"];
+      const accentColor: AdItem["accentColor"] = allowedColors.includes(ad?.accentColor)
+        ? ad.accentColor
+        : prev.accentColor;
+      const allowedAspects: NonNullable<AdItem["aspectMode"]>[] = ["blur16x9", "crop16x9", "original"];
+      const aspectMode: NonNullable<AdItem["aspectMode"]> = allowedAspects.includes(ad?.aspectMode)
+        ? ad.aspectMode
+        : (prev.aspectMode || "blur16x9");
+
+      const updated: AdItem = {
+        ...prev,
+        badge: ad?.badge !== undefined ? (String(ad.badge).trim().slice(0, 20) || "추천 홍보") : prev.badge,
+        title: ad?.title !== undefined ? String(ad.title).trim().slice(0, 120) : prev.title,
+        description: ad?.description !== undefined ? String(ad.description).trim().slice(0, 600) : prev.description,
+        tickerText: ad?.tickerText !== undefined ? String(ad.tickerText).trim().slice(0, 200) : prev.tickerText,
+        mediaType: nextMediaType,
+        mediaUrl: nextMediaUrl,
+        linkUrl: ad?.linkUrl !== undefined ? sanitizeAdUrl(ad.linkUrl, false) : prev.linkUrl,
+        linkLabel: ad?.linkLabel !== undefined ? (String(ad.linkLabel).trim().slice(0, 30) || "자세히 보기") : prev.linkLabel,
+        accentColor,
+        aspectMode,
+        isActive: typeof ad?.isActive === "boolean" ? ad.isActive : prev.isActive,
+        updatedAt: new Date().toISOString()
+      };
+
+      const nextAds = [...ads];
+      nextAds[idx] = updated;
+      saveAds(nextAds);
+
+      if (prev.mediaUrl && prev.mediaUrl !== updated.mediaUrl) {
+        deleteLocalAdMediaIfUnused(prev.mediaUrl, nextAds);
+      }
+
+      res.json({ success: true, ad: updated, ads: nextAds });
+    } catch (err: any) {
+      console.error("Update ad error:", err);
+      res.status(500).json({ error: err.message || "광고 수정 중 오류가 발생했습니다." });
+    }
+  });
+
+  // Admin: reorder ads
+  app.post("/api/admin/ads/reorder", (req, res) => {
+    try {
+      const { password, orderedIds } = req.body;
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "잘못된 순서 데이터입니다." });
+      }
+
+      const ads = loadAds();
+      const map = new Map(ads.map((a) => [a.id, a]));
+      const reordered: AdItem[] = [];
+      for (const id of orderedIds) {
+        const found = map.get(String(id));
+        if (found) {
+          reordered.push({ ...found, order: reordered.length });
+          map.delete(String(id));
+        }
+      }
+      for (const remaining of map.values()) {
+        reordered.push({ ...remaining, order: reordered.length });
+      }
+
+      saveAds(reordered);
+      res.json({ success: true, ads: reordered });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "순서 변경 실패" });
+    }
+  });
+
+  // Admin: delete ad item
+  app.delete("/api/admin/ads/:id", (req, res) => {
+    try {
+      const password = String(req.body?.password || req.headers["x-admin-password"] || "");
+      if (password !== getAdminPassword()) {
+        return res.status(401).json({ error: "관리자 비밀번호가 일치하지 않습니다." });
+      }
+
+      const ads = loadAds();
+      const target = ads.find((item) => item.id === req.params.id);
+      if (!target) {
+        return res.status(404).json({ error: "삭제할 광고를 찾을 수 없습니다." });
+      }
+
+      const nextAds = ads
+        .filter((item) => item.id !== req.params.id)
+        .map((item, idx) => ({ ...item, order: idx }));
+      saveAds(nextAds);
+      deleteLocalAdMediaIfUnused(target.mediaUrl, nextAds);
+
+      res.json({ success: true, ads: nextAds });
+    } catch (err: any) {
+      console.error("Delete ad error:", err);
+      res.status(500).json({ error: err.message || "광고 삭제 중 오류가 발생했습니다." });
+    }
+  });
 
   // Track page view or feature selection
   app.post("/api/admin/track-visit", (req, res) => {
@@ -612,6 +1486,22 @@ async function startServer() {
       res.json({ success: true, visits });
     } catch (err: any) {
       console.error("Failed to fetch visits:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Lightweight admin password check for private sections
+  app.post("/api/admin/verify", (req, res) => {
+    try {
+      const { password } = req.body || {};
+      const adminPassword = getAdminPassword();
+
+      if (!password || password !== adminPassword) {
+        return res.status(401).json({ error: "비밀번호가 일치하지 않습니다." });
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -664,14 +1554,16 @@ async function startServer() {
   // Public payment config (no secret keys exposed)
   app.get("/api/payments/public-config", (_req, res) => {
     const cfg = getPaymentConfig();
+    const allPlans = Object.values(PLAN_CATALOG);
     res.json({
       success: true,
-      plans: Object.values(PLAN_CATALOG),
+      plans: allPlans.filter((p) => p.category === "tester"),
+      sitePlans: allPlans.filter((p) => p.category === "site"),
       config: {
         bankName: cfg.bankName,
         accountNumber: cfg.accountNumber,
         accountHolder: cfg.accountHolder,
-        remittanceUrl: cfg.remittanceUrl,
+        remittanceUrl: sanitizeHttpUrl(cfg.remittanceUrl),
         contactInfo: cfg.contactInfo,
         paymentNotice: cfg.paymentNotice,
         tossClientKey: cfg.tossClientKey,
@@ -683,12 +1575,12 @@ async function startServer() {
   // Create new order (server-authoritative plan price)
   app.post("/api/orders", (req, res) => {
     try {
-      const { planId, appName, packageName, depositorName, contact, email, paymentMethod } = req.body;
+      const { planId, appName, packageName, depositorName, contact, email, paymentMethod, note } = req.body;
       const plan = PLAN_CATALOG[planId];
       if (!plan) {
         return res.status(400).json({ error: "유효하지 않은 요금제입니다." });
       }
-      if (!appName || !String(appName).trim()) {
+      if (plan.category === "tester" && (!appName || !String(appName).trim())) {
         return res.status(400).json({ error: "앱 이름을 입력해 주세요." });
       }
       if (!depositorName || !String(depositorName).trim()) {
@@ -710,16 +1602,25 @@ async function startServer() {
       const randTag = Math.random().toString(36).substring(2, 8).toUpperCase();
       const nowIso = new Date().toISOString();
 
+      const resolvedAppName =
+        plan.category === "site"
+          ? String(appName || "ANY1 AI 유료 이용권").trim()
+          : String(appName).trim();
+      const resolvedSubInfo =
+        plan.category === "site"
+          ? String(note || "").trim().slice(0, 200)
+          : String(packageName || "").trim();
+
       const newOrder: OrderRecord = {
         id: `ORD-${dateTag}-${randTag}`,
         planId: plan.id,
         planName: plan.name,
         amount: plan.price,
-        appName: String(appName).trim(),
-        packageName: String(packageName || "").trim(),
-        depositorName: String(depositorName).trim(),
-        contact: String(contact).trim(),
-        email: String(email).trim(),
+        appName: resolvedAppName,
+        packageName: resolvedSubInfo,
+        depositorName: String(depositorName).trim().slice(0, 80),
+        contact: String(contact).trim().slice(0, 80),
+        email: String(email).trim().slice(0, 120),
         paymentMethod: validMethod,
         status: "pending",
         createdAt: nowIso,
@@ -740,7 +1641,7 @@ async function startServer() {
         regionName: "Checkout",
         city: `${plan.price.toLocaleString()}원`,
         userAgent: req.headers['user-agent'] || "Unknown",
-        referrer: "TesterMatchHub Pricing",
+        referrer: plan.category === "site" ? "ANY1 AI Site Membership" : "TesterMatchHub Pricing",
         featureAccess: `유료 결제 접수 [${newOrder.id}] (${plan.name})`
       });
 
@@ -959,9 +1860,70 @@ async function startServer() {
     }
   });
 
+  // Visitor trial quota & paid pass verification endpoints
+  app.get("/api/membership/status", (req, res) => {
+    const visitorKey = resolveVisitorKey(req);
+    const trial = getFreeTrialStatus(visitorKey);
+    const orderId = String(req.query.orderId || req.headers["x-any1-membership-order"] || "").trim();
+    let membership = null;
+    if (orderId) {
+      const verified = verifySiteMembershipPass({ orderId });
+      if (verified.status === "active" && verified.membership) {
+        membership = verified.membership;
+      }
+    }
+    res.json({
+      success: true,
+      ...trial,
+      membership
+    });
+  });
+
+  app.post("/api/membership/activate", (req, res) => {
+    const orderId = String(req.body?.orderId || "").trim();
+    const email = String(req.body?.email || "").trim();
+    if (!orderId && !email) {
+      return res.status(400).json({ error: "주문번호(ORD-...) 또는 결제 시 입력한 이메일을 입력해 주세요." });
+    }
+
+    const result = verifySiteMembershipPass({ orderId, email });
+    if (result.status === "active" && result.membership) {
+      return res.json({
+        success: true,
+        active: true,
+        membership: result.membership
+      });
+    }
+    if (result.status === "pending" && result.order) {
+      return res.json({
+        success: false,
+        pending: true,
+        orderId: result.order.id,
+        planName: result.order.planName,
+        error: "입금 확인 대기 중인 주문입니다. 관리자가 입금을 확인하면 즉시 유료 이용권이 활성화됩니다."
+      });
+    }
+    if (result.status === "expired") {
+      return res.status(400).json({ error: "유료 이용권 사용 기간이 만료되었습니다. 새 이용권을 결제해 주세요." });
+    }
+    if (result.status === "cancelled") {
+      return res.status(400).json({ error: "취소된 주문입니다. 다시 결제 신청해 주세요." });
+    }
+    return res.status(404).json({ error: "일치하는 사이트 유료 이용권 결제 내역을 찾을 수 없습니다." });
+  });
+
   // API routes
   app.post("/api/ai/chat", async (req, res) => {
     const { prompt, feature, image, file, customApiKey } = req.body;
+
+    const access = evaluateAiAccess(req, customApiKey);
+    if (!access.allowed) {
+      return res.status(402).json({
+        error: `초기 무료 체험 ${access.trial.freeTrialLimit}회를 모두 사용하셨습니다. 유료 이용권으로 전환하시면 모든 AI 기능을 무제한으로 이용하실 수 있습니다.`,
+        code: "FREE_TRIAL_EXHAUSTED",
+        ...access.trial
+      });
+    }
 
     // Track AI request interaction
     try {
@@ -1010,9 +1972,6 @@ async function startServer() {
       '내 목소리로 음성만들기': '내 목소리로 음성만들기',
       '쉬운 문서·음성 요약': '음성/영상 스크립트 변환',
       '글쓰기·시·가사 창작': '창작 지원',
-      '냉장고 맞춤 레시피': '레시피 제공',
-      '식물·꽃 이름 & 케어': '식물/꽃 식별',
-      '사업계획서·기획안': '사업계획서 작성',
       '프로그램·웹 제작 도우미': '프로그램/홈페이지 제작'
     };
 
@@ -1138,7 +2097,8 @@ async function startServer() {
       }
     }
 
-    res.json({ text: text, isDeveloperEngine: !client });
+    const nextTrial = access.bypassTrial ? null : incrementFreeTrial(access.visitorKey);
+    res.json({ text: text, isDeveloperEngine: !client, ...(nextTrial ? { _trial: nextTrial } : {}) });
   });
 
   // Real-time Astronomical Daily Fortune & Compatibility Engine
@@ -1629,9 +2589,20 @@ async function startServer() {
   // High-Fidelity Neural Text-to-Speech API
   app.post("/api/ai/tts", async (req, res) => {
     try {
-      const { text, presetId, rate = 1.0, pitch = 1.0, volume = 1.0, customApiKey } = req.body;
+      const { text, presetId, rate = 1.0, pitch = 1.0, volume = 1.0, customApiKey, isSamplePreview } = req.body;
       if (!text || typeof text !== "string" || !text.trim()) {
         return res.status(400).json({ error: "텍스트가 입력되지 않았습니다." });
+      }
+
+      const access = isSamplePreview
+        ? { allowed: true as const, bypassTrial: true as const }
+        : evaluateAiAccess(req, customApiKey);
+      if (!access.allowed) {
+        return res.status(402).json({
+          error: `초기 무료 체험 ${access.trial.freeTrialLimit}회를 모두 사용하셨습니다. 유료 이용권으로 전환하시면 AI 성우 음성을 무제한 생성할 수 있습니다.`,
+          code: "FREE_TRIAL_EXHAUSTED",
+          ...access.trial
+        });
       }
 
       const input = text.trim();
@@ -1697,13 +2668,15 @@ async function startServer() {
           });
           const base64Audio = geminiRes.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
           if (base64Audio) {
+            const nextTrial = access.bypassTrial ? null : incrementFreeTrial(access.visitorKey);
             return res.json({
               success: true,
               audioBase64: base64Audio,
               mimeType: "audio/wav",
               provider: "gemini-tts",
               voice: geminiVoice,
-              gender
+              gender,
+              ...(nextTrial ? { _trial: nextTrial } : {})
             });
           }
         } catch (geminiErr: any) {
@@ -1742,6 +2715,7 @@ async function startServer() {
           if (audioChunks.length > 0) {
             const audioBuffer = Buffer.concat(audioChunks);
             const audioBase64 = audioBuffer.toString("base64");
+            const nextTrial = access.bypassTrial ? null : incrementFreeTrial(access.visitorKey);
 
             return res.json({
               success: true,
@@ -1749,7 +2723,8 @@ async function startServer() {
               mimeType: "audio/mp3",
               provider: "edge-neural-tts",
               voice: edgeVoice,
-              gender
+              gender,
+              ...(nextTrial ? { _trial: nextTrial } : {})
             });
           }
         } catch (edgeErr: any) {
@@ -1845,13 +2820,15 @@ async function startServer() {
       });
 
       if (finalAudioBuf && finalAudioBuf.length > 0) {
+        const nextTrial = access.bypassTrial ? null : incrementFreeTrial(access.visitorKey);
         return res.json({
           success: true,
           audioBase64: finalAudioBuf.toString("base64"),
           mimeType: "audio/mp3",
           provider: "neural-dsp-tts",
           voice: voiceTitle,
-          gender
+          gender,
+          ...(nextTrial ? { _trial: nextTrial } : {})
         });
       }
 

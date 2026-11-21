@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Loader2, Trash2, Lightbulb, Camera, Upload, X, Map as MapIcon, File as FileIcon, Image as ImageIcon, Play, Square, Volume2, Settings, Info, Sparkles, Mic2, Download, Save, Search, FileUp, Plus, Check, Copy, Video, AlertCircle, Key, Shield, CheckCircle, HelpCircle, Cpu, RefreshCw } from 'lucide-react';
+import { Send, Loader2, Trash2, Lightbulb, Camera, Upload, X, Map as MapIcon, File as FileIcon, Image as ImageIcon, Play, Square, Volume2, Settings, Info, Sparkles, Mic2, Download, Save, Search, FileUp, Plus, Check, Copy, Video, AlertCircle, Key, Shield, CheckCircle, HelpCircle, Cpu, RefreshCw, Crown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import {
+  fetchMembershipStatus,
+  getMembershipHeaders,
+  notifyTrialUpdated,
+  openUpgradeCheckout,
+  TrialStatus
+} from '../utils/membershipClient';
 import SajuChart from './SajuChart';
 import MapViewer from './MapViewer';
 import FaceAnalysisView from './FaceAnalysisView';
@@ -103,14 +110,42 @@ export default function FeatureDetail({ featureId, title, description, suggestio
   const [copied, setCopied] = useState(false);
   const [textCopied, setTextCopied] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [freeUsageCount, setFreeUsageCount] = useState<number>(0);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus>({
+    freeTrialLimit: 3,
+    freeUsed: 0,
+    freeRemaining: 3,
+    membership: null
+  });
 
-  // Clear any legacy visitor limit count on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('any1_user_free_usage_count');
-      setFreeUsageCount(0);
-    }
+    let active = true;
+    const syncStatus = async () => {
+      const next = await fetchMembershipStatus();
+      if (active && next) {
+        setTrialStatus(next);
+      }
+    };
+    void syncStatus();
+
+    const onTrial = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      setTrialStatus((prev) => ({
+        ...prev,
+        freeTrialLimit: detail.freeTrialLimit ?? prev.freeTrialLimit,
+        freeUsed: detail.freeUsed ?? prev.freeUsed,
+        freeRemaining: detail.freeRemaining ?? prev.freeRemaining
+      }));
+    };
+    const onMembership = () => {
+      void syncStatus();
+    };
+    window.addEventListener('any1:trial-updated', onTrial);
+    window.addEventListener('any1:membership-changed', onMembership);
+    return () => {
+      active = false;
+      window.removeEventListener('any1:trial-updated', onTrial);
+      window.removeEventListener('any1:membership-changed', onMembership);
+    };
   }, []);
   
   const getYouTubeId = (url: string): string | null => {
@@ -1792,7 +1827,10 @@ export default function FeatureDetail({ featureId, title, description, suggestio
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getMembershipHeaders()
+        },
         body: JSON.stringify({ 
           prompt: finalPrompt || (featureId === 'face' ? '이미지의 얼굴 관상을 정밀하게 분석하여 운세를 풀이해 주세요.' : ''), 
           feature: title,
@@ -1801,6 +1839,17 @@ export default function FeatureDetail({ featureId, title, description, suggestio
           customApiKey: customApiKey
         }),
       });
+
+      if (res.status === 402) {
+        const errData = await res.json().catch(() => ({}));
+        notifyTrialUpdated({ freeRemaining: 0 });
+        openUpgradeCheckout('exhausted', title);
+        setResponse(
+          errData.error ||
+            '초기 무료 체험 3회를 모두 사용하셨습니다. 상단 또는 팝업의 [이용권 결제]에서 유료 이용권으로 전환하시면 무제한 이용하실 수 있습니다.'
+        );
+        return;
+      }
 
       if (!res.ok) {
         let errorMessage = '서버 응답 오류';
@@ -1814,6 +1863,9 @@ export default function FeatureDetail({ featureId, title, description, suggestio
       }
 
       const data = await res.json();
+      if (data._trial) {
+        notifyTrialUpdated(data._trial);
+      }
       const rawText = data.text || '';
 
       
@@ -2018,13 +2070,23 @@ export default function FeatureDetail({ featureId, title, description, suggestio
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getMembershipHeaders()
+        },
         body: JSON.stringify({
           prompt: promptPayload,
           feature: 'AI 정밀 만세력',
           customApiKey: customApiKey
         })
       });
+
+      if (res.status === 402) {
+        const errData = await res.json().catch(() => ({}));
+        notifyTrialUpdated({ freeRemaining: 0 });
+        openUpgradeCheckout('exhausted', '정밀 사주 1:1 추가 상담');
+        throw new Error(errData.error || '무료 체험 3회를 모두 사용하셨습니다. 유료 이용권으로 전환해 주세요.');
+      }
 
       if (!res.ok) {
         let errMessage = '상담 응답 생성 실패';
@@ -2036,6 +2098,9 @@ export default function FeatureDetail({ featureId, title, description, suggestio
       }
 
       const data = await res.json();
+      if (data._trial) {
+        notifyTrialUpdated(data._trial);
+      }
       const rawAnswer = data.text || '';
       const cleanAnswer = cleanBoilerplate(rawAnswer.replace(/```json\s*[\s\S]*?\s*```/, '').trim());
 
@@ -2149,18 +2214,76 @@ export default function FeatureDetail({ featureId, title, description, suggestio
     );
   };
 
+  const renderFreemiumStatusBar = () => {
+    if (trialStatus.membership?.active) {
+      return (
+        <div className="mb-8 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/35 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+            <Crown size={15} />
+            <span>{trialStatus.membership.planName} 활성화됨 · 전 기능 무제한 이용 중</span>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-200/80">
+            주문번호: {trialStatus.membership.orderId}
+          </span>
+        </div>
+      );
+    }
+    if (customApiKey) {
+      return (
+        <div className="mb-8 px-4 py-3 rounded-xl bg-neon/10 border border-neon/35 flex items-center justify-between gap-3 text-xs font-bold text-neon">
+          <span className="flex items-center gap-2">
+            <Shield size={14} />
+            <span>개인 Gemini API 키 연결됨 · 무제한 이용 중</span>
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className="mb-8 px-4 py-3 rounded-xl bg-white/[0.02] border border-amber-400/30 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-text-light/85">
+          <Cpu size={14} className={trialStatus.freeRemaining > 0 ? 'text-neon' : 'text-amber-400'} />
+          {trialStatus.freeRemaining > 0 ? (
+            <span>
+              초기 무료 체험{' '}
+              <strong className="text-neon">
+                {trialStatus.freeRemaining} / {trialStatus.freeTrialLimit}회
+              </strong>{' '}
+              남음 · 체험 후 유료 이용권으로 무제한 전환 가능
+            </span>
+          ) : (
+            <span className="text-amber-300 font-bold">
+              무료 체험 {trialStatus.freeTrialLimit}회를 모두 사용하셨습니다. 유료 이용권으로 전환하면 바로 무제한 이용 가능합니다.
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            openUpgradeCheckout(trialStatus.freeRemaining > 0 ? 'voluntary' : 'exhausted', title)
+          }
+          className="px-3.5 py-1.5 rounded-lg bg-amber-400/20 hover:bg-amber-400 text-amber-200 hover:text-bg-dark border border-amber-400/50 text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+        >
+          <Crown size={12} />
+          <span>{trialStatus.freeRemaining > 0 ? '유료 이용권 전환하기' : '유료 이용권 결제·인증'}</span>
+        </button>
+      </div>
+    );
+  };
+
   if (featureId === 'tts') {
     return (
       <div className="max-w-5xl mx-auto py-8">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-12 border-l-4 border-neon pl-6"
+          className="mb-6 border-l-4 border-neon pl-6"
         >
           <span className="text-[10px] tracking-[0.4em] font-bold text-neon uppercase mb-2 block">Module / Active</span>
           <h1 className="text-5xl font-black italic tracking-tighter uppercase mb-4 text-text-light">{title}</h1>
           <p className="text-text-light/40 text-sm font-medium uppercase tracking-widest leading-relaxed max-w-2xl">{description}</p>
         </motion.div>
+
+        {renderFreemiumStatusBar()}
         
         <TextToSpeechView />
       </div>
@@ -2173,12 +2296,14 @@ export default function FeatureDetail({ featureId, title, description, suggestio
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-12 border-l-4 border-neon pl-6"
+          className="mb-6 border-l-4 border-neon pl-6"
         >
           <span className="text-[10px] tracking-[0.4em] font-bold text-neon uppercase mb-2 block">Module / Active</span>
           <h1 className="text-5xl font-black italic tracking-tighter uppercase mb-4 text-text-light">{title}</h1>
           <p className="text-text-light/40 text-sm font-medium uppercase tracking-widest leading-relaxed max-w-2xl">{description}</p>
         </motion.div>
+
+        {renderFreemiumStatusBar()}
         
         <MyVoiceCloneView />
       </div>
@@ -2190,12 +2315,14 @@ export default function FeatureDetail({ featureId, title, description, suggestio
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-12 border-l-4 border-neon pl-6"
+        className="mb-6 border-l-4 border-neon pl-6"
       >
         <span className="text-[10px] tracking-[0.4em] font-bold text-neon uppercase mb-2 block">Module / Active</span>
         <h1 className="text-5xl font-black italic tracking-tighter uppercase mb-4 text-text-light">{title}</h1>
         <p className="text-text-light/40 text-sm font-medium uppercase tracking-widest leading-relaxed max-w-2xl">{description}</p>
       </motion.div>
+
+      {renderFreemiumStatusBar()}
 
       {featureId === 'playstore-builder' ? (
         <div className="space-y-10 mb-12">
@@ -4322,15 +4449,26 @@ export default function FeatureDetail({ featureId, title, description, suggestio
                   const sPrompt = `${year}년 ${month}월 ${day}일 ${timeDisplay}생, ${calendar === 'solar' ? '양력' : '음력'}, ${gender === 'male' ? '남성' : '여성'}의 사주를 분석해주세요.`;
                   const sRes = await fetch('/api/ai/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...getMembershipHeaders()
+                    },
                     body: JSON.stringify({ 
                       prompt: sPrompt, 
                       feature: 'AI 정밀 만세력',
                       customApiKey: customApiKey
                     }),
                   });
+                  if (sRes.status === 402) {
+                    notifyTrialUpdated({ freeRemaining: 0 });
+                    openUpgradeCheckout('exhausted', 'AI 풍수지리');
+                    return;
+                  }
                   if (sRes.ok) {
                     const sData = await sRes.json();
+                    if (sData._trial) {
+                      notifyTrialUpdated(sData._trial);
+                    }
                     const sRawText = sData.text || '';
                     const jsonMatch = sRawText.match(/```json\s*([\s\S]*?)\s*```/);
                     if (jsonMatch) {
@@ -5204,20 +5342,49 @@ export default function FeatureDetail({ featureId, title, description, suggestio
           </div>
         )}
 
-        {/* Free Quota Info Badge */}
-        {!customApiKey ? (
+        {/* Free Trial & Paid Membership Status Bar */}
+        {trialStatus.membership?.active ? (
           <div className="flex justify-end mb-2.5">
-            <span className="text-[10px] text-text-light/40 font-mono flex items-center gap-1.5 uppercase tracking-wider select-none">
-              <Cpu size={10} className="text-neon animate-pulse" />
-              서버 무료 한도: {Math.max(0, 5 - freeUsageCount)}회 남음
+            <span className="text-[11px] text-emerald-300 font-bold flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 select-none">
+              <Crown size={12} className="text-emerald-300" />
+              <span>{trialStatus.membership.planName} 이용 중 (무제한)</span>
             </span>
           </div>
-        ) : (
+        ) : customApiKey ? (
           <div className="flex justify-end mb-2.5">
             <span className="text-[10px] text-neon font-mono flex items-center gap-1.5 uppercase tracking-wider select-none">
               <Shield size={10} className="text-neon" />
               나만의 독립 전용 회선 연결됨 (무제한)
             </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 px-3 py-2 rounded-lg bg-white/[0.02] border border-border-dark">
+            <span className="text-[11px] text-text-light/70 flex items-center gap-1.5">
+              <Cpu size={12} className={trialStatus.freeRemaining > 0 ? 'text-neon' : 'text-amber-400'} />
+              {trialStatus.freeRemaining > 0 ? (
+                <span>
+                  초기 무료 체험{' '}
+                  <strong className="text-neon">
+                    {trialStatus.freeRemaining} / {trialStatus.freeTrialLimit}회
+                  </strong>{' '}
+                  남음
+                </span>
+              ) : (
+                <span className="text-amber-300 font-bold">
+                  무료 체험 {trialStatus.freeTrialLimit}회 사용 완료 — 유료 이용권으로 무제한 전환 가능
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                openUpgradeCheckout(trialStatus.freeRemaining > 0 ? 'voluntary' : 'exhausted', title)
+              }
+              className="text-[11px] font-black px-2.5 py-1 rounded bg-amber-400/15 hover:bg-amber-400 text-amber-300 hover:text-bg-dark border border-amber-400/40 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Crown size={11} />
+              <span>{trialStatus.freeRemaining > 0 ? '유료 이용권 전환' : '지금 유료 전환하기'}</span>
+            </button>
           </div>
         )}
 
